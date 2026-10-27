@@ -12,22 +12,39 @@ event=$(printf '%s' "$input" | jq -r '.hook_event_name // "UserPromptSubmit"')
 sid=$(printf '%s' "$input" | jq -r '.session_id // empty')
 [ -z "$sid" ] && exit 0
 # A prompt that is just "Done" marks the session finished: its title gets a leading "✅ ".
-# Any other prompt reopens it, so the ✅ comes off. Stop can't see the prompt, so the
+# A prompt that is just "Close" marks it closed without finishing: a leading "❎ ".
+# Any other prompt reopens it, so the mark comes off. Stop can't see the prompt, so the
 # UserPromptSubmit run records the verdict for the Stop run of the same turn.
 state="${TMPDIR:-/tmp}/session-title-$sid.done"
 if [ "$event" = Stop ]; then
-  said_done=$(cat "$state" 2>/dev/null || echo no)
+  said=$(cat "$state" 2>/dev/null || echo no)
 else
-  said_done=no
-  printf '%s' "$input" | jq -r '.prompt // ""' | tr -d '[:space:]' | grep -qiE '^done[.!]*$' && said_done=yes
-  printf '%s' "$said_done" > "$state"
+  said=no
+  word=$(printf '%s' "$input" | jq -r '.prompt // ""' | tr -d '[:space:]')
+  printf '%s' "$word" | grep -qiE '^done[.!]*$' && said=done
+  printf '%s' "$word" | grep -qiE '^close[.!]*$' && said=close
+  printf '%s' "$said" > "$state"
 fi
+# The mark this turn's prompt asks for ("yes" is the verdict an older version of this hook wrote).
+case "$said" in
+  done|yes) mark="✅ "; said_word=Done ;;
+  close) mark="❎ "; said_word=Close ;;
+  *) mark=""; said_word="" ;;
+esac
 
 rename='Rename with mcp__ccd_session_mgmt__set_session_title (session_id "self").'
 repos=${SESSION_TITLE_REPOS:-W Web, A API, M Mobile}
 rule="Parent session titles are \"<repos>[:<stories>][ ➔ #<PRs>] | <3-6 word title>\": repos are one letter each, comma-separated ($repos, G general or not yet known; another repo gets its first letter); stories are ticket ids, the first in full and the rest as numbers (DEV-1234,1235); PRs are numbers in the same order as the repos (#132,100). Leave out \":<stories>\" when no story is known and \" ➔ #<PRs>\" when there is no PR yet. E.g. \"W:DEV-1234 ➔ #132 | Local DB setup\", \"W,A,M:DEV-1234,1235,1236 ➔ #132,133,134 | ...\", \"A | Login bug fixes\", \"G | Weekly planning\". Forks are titled \"(<2-5 word topic>) <root parent title>\"."
-# A parent title in the agreed shape, optionally marked "✅ " once the user has said "Done".
-shape='^(✅ )?[A-Z](,[A-Z])*(:[A-Z][A-Z0-9]*-[0-9]+(,[0-9]+)*)?( ➔ #[0-9]+(,[0-9]+)*)? \| .+'
+# A parent title in the agreed shape, optionally marked "✅ " (the user said "Done") or "❎ " ("Close").
+shape='^((✅|❎) )?[A-Z](,[A-Z])*(:[A-Z][A-Z0-9]*-[0-9]+(,[0-9]+)*)?( ➔ #[0-9]+(,[0-9]+)*)? \| .+'
+
+# The mark a title starts with ("✅ ", "❎ " or nothing), and what it means.
+mark_of() {
+  case "$1" in "✅ "*) printf '✅ ' ;; "❎ "*) printf '❎ ' ;; esac
+}
+mark_word() {
+  case "$1" in "✅ ") printf finished ;; "❎ ") printf closed ;; esac
+}
 
 say() {
   jq -n --arg c "$1" '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: $c}}'
@@ -75,19 +92,17 @@ if [ "$is_fork" = yes ]; then
     fi
   done
   [ -n "$base" ] || exit 0
-  # A fork carries its own "✅ "; the root parent's mark is not part of the fork's base title.
-  base=${base#"✅ "}
-  had=""
-  case "$title" in "✅ "*) had="✅ "; title=${title#"✅ "} ;; esac
-  # The ✅ follows this turn's prompt: on for "Done", off for anything else.
-  mark=""
-  [ "$said_done" = yes ] && mark="✅ "
+  # A fork carries its own mark; the root parent's mark is not part of the fork's base title.
+  base=${base#"$(mark_of "$base")"}
+  had=$(mark_of "$title")
+  title=${title#"$had"}
+  # The mark follows this turn's prompt: ✅ for "Done", ❎ for "Close", none for anything else.
   if [ "$had" != "$mark" ]; then
     case "$title" in "("?*") $base")
       if [ -n "$mark" ]; then
-        fix="The user said \"Done\": this fork is finished. Rename it to \"✅ $title\". $rename"
+        fix="The user said \"$said_word\": this fork is $(mark_word "$mark"). Rename it to \"$mark$title\". $rename"
       else
-        fix="The user continued this finished fork, so it is open again: remove the ✅ by renaming it to \"$title\". $rename"
+        fix="The user continued this $(mark_word "$had") fork, so it is open again: remove the ${had% } by renaming it to \"$title\". $rename"
       fi
       [ "$event" = Stop ] && block "$fix"
       say "$fix Do this before ending your reply." ;;
@@ -119,16 +134,18 @@ if [ "$is_fork" = yes ]; then
   esac
 fi
 
-if [ "$said_done" = no ] && [ "${title#"✅ "}" != "$title" ]; then
-  fix="The user continued a finished session, so it is open again: remove the ✅ by renaming it to \"${title#"✅ "}\" (and update the rest of the title if the scope changed). Leave its forks' own ✅ alone. $rename"
+had=$(mark_of "$title")
+bare=${title#"$had"}
+if [ -z "$mark" ] && [ -n "$had" ]; then
+  fix="The user continued a $(mark_word "$had") session, so it is open again: remove the ${had% } by renaming it to \"$bare\" (and update the rest of the title if the scope changed). Leave its forks' own marks alone. $rename"
   [ "$event" = Stop ] && block "$fix"
   say "$fix Do this before ending your reply."
-elif [ "$said_done" = yes ] && [ -n "$title" ] && [ "${title#"✅ "}" = "$title" ]; then
-  [ "$event" = Stop ] && block "the user said \"Done\", but the title still has no ✅; rename it to \"✅ $title\". $rename"
-  say "The user said \"Done\": this session is finished. Before ending your reply, rename it to \"✅ $title\" (fixing the rest of the title first if it isn't in the agreed shape), but leave its forks alone: a fork's title ends with the parent title without the ✅, and a fork gets its own ✅ only when it is finished. $rename"
+elif [ -n "$mark" ] && [ -n "$title" ] && [ "$had" != "$mark" ]; then
+  [ "$event" = Stop ] && block "the user said \"$said_word\", but the title doesn't start with ${mark% }; rename it to \"$mark$bare\". $rename"
+  say "The user said \"$said_word\": this session is $(mark_word "$mark"). Before ending your reply, rename it to \"$mark$bare\" (fixing the rest of the title first if it isn't in the agreed shape), but leave its forks alone: a fork's title ends with the parent title without the mark, and a fork gets its own ✅ or ❎ only when the user says \"Done\" or \"Close\" in that fork. $rename"
 elif printf '%s' "$title" | grep -qE "$shape"; then
   [ "$event" = Stop ] && exit 0
-  say "Session title: \"$title\". $rule The title covers the session's whole current scope, not just its first prompt. Before ending your reply, update the prefix if this turn identified a repo, story id or PR number it lacks (or replaces G), and rewrite the title text if the work has shifted or widened beyond it; otherwise leave the title alone. Keep a leading \"✅ \" when renaming. When you rename it, also rename every fork whose title ends with the old title (find them with mcp__ccd_session_mgmt__list_sessions) to \"(<its topic>) <new title without a leading ✅>\", keeping each fork's own leading \"✅ \". $rename"
+  say "Session title: \"$title\". $rule The title covers the session's whole current scope, not just its first prompt. Before ending your reply, update the prefix if this turn identified a repo, story id or PR number it lacks (or replaces G), and rewrite the title text if the work has shifted or widened beyond it; otherwise leave the title alone. Keep a leading \"✅ \" or \"❎ \" when renaming. When you rename it, also rename every fork whose title ends with the old title (find them with mcp__ccd_session_mgmt__list_sessions) to \"(<its topic>) <new title without a leading ✅ or ❎>\", keeping each fork's own leading mark. $rename"
 elif [ -z "$title" ]; then
   [ "$event" = Stop ] && block "this session has no title; title it \"G | <3-6 word topic>\" (the real repo/story/PR prefix if the conversation shows one). $rename"
   say "This session has no title yet. $rule Before ending your reply, title it \"G | <3-6 word topic>\", using the real repo/story/PR prefix if this turn already shows one. $rename"

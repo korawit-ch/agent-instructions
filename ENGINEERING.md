@@ -371,12 +371,12 @@ repo), `learn` (teach and quiz me), `agents-md` (writing repo agent instructions
   unknown, e.g. `A:DEV-1234 ➔ #132 | …`, `A,D ➔ #132,100 | …`, `G | …`. A fork is
   `(<topic>) <root parent title>`. The title covers the session's current scope, not its first
   prompt; when a parent's title changes, rename its forks to match. A finished session gets `✅ `
-  in front of its title (`✅ D:DEV-1234 ➔ #105 | …`, `✅ (<topic>) …`): add it when my message is
-  just "Done", and remove it as soon as I send any other message in that session (it's open
-  again). A parent's ✅ doesn't pass to its forks; a fork
-  gets its own when it's finished. When I ask for a ✅ sweep, pinned sessions are
-  still in progress and unpinned ones are finished. In Claude desktop,
-  `hooks/session-title.sh` checks this on every prompt and at the end of each
+  in front of its title (`✅ D:DEV-1234 ➔ #105 | …`, `✅ (<topic>) …`) when my message is just
+  "Done"; a session closed without finishing gets `❎ ` when my message is just "Close". One mark
+  at a time, and any other message I send in that session removes it (it's open again). A
+  parent's mark doesn't pass to its forks; a fork gets its own when I say "Done" or "Close" in it.
+  When I ask for a ✅ sweep, pinned sessions are still in progress and unpinned ones are finished.
+  In Claude desktop, `hooks/session-title.sh` checks this on every prompt and at the end of each
   turn; follow what it says. Where you can't rename the session yourself, tell me the title to use
   when the project, PR or topic first becomes clear or changes.
 
