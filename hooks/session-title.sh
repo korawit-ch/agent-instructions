@@ -1,7 +1,7 @@
 #!/bin/bash
 # Keeps Claude desktop session titles in the agreed shape.
-#   Parent (never forked, or detached): "<repos>[:<stories>][ ➔ #<PRs>] | <title>",
-#     e.g. "W:DEV-1234 ➔ #132 | ...", "W,A ➔ #132,100 | ...", "G | ..." until the repo is known.
+#   Parent (never forked, or detached): "[<stories> ➔ ]<repo>[#<PRs>][,<repo>[#<PRs>]...] | <title>",
+#     e.g. "DEV-1234 ➔ W#139,140,A#100 | ...", "W#132 | ...", "G | ..." until the repo is known.
 #   Set SESSION_TITLE_REPOS to your own repo letters, e.g. "W Web, A API, M Mobile".
 #   Fork: "(<topic>) <root parent's current title>"; a fresh "(fork)" asks the user for the topic first.
 # UserPromptSubmit: tells Claude what to check this turn.
@@ -34,9 +34,9 @@ esac
 
 rename='Rename with mcp__ccd_session_mgmt__set_session_title (session_id "self").'
 repos=${SESSION_TITLE_REPOS:-W Web, A API, M Mobile}
-rule="Parent session titles are \"<repos>[:<stories>][ ➔ #<PRs>] | <3-6 word title>\": repos are one letter each, comma-separated ($repos, G general or not yet known; another repo gets its first letter); stories are ticket ids, the first in full and the rest as numbers (DEV-1234,1235); PRs are numbers in the same order as the repos (#132,100). Leave out \":<stories>\" when no story is known and \" ➔ #<PRs>\" when there is no PR yet. E.g. \"W:DEV-1234 ➔ #132 | Local DB setup\", \"W,A,M:DEV-1234,1235,1236 ➔ #132,133,134 | ...\", \"A | Login bug fixes\", \"G | Weekly planning\". Forks are titled \"(<2-5 word topic>) <root parent title>\"."
+rule="Parent session titles are \"[<stories> ➔ ]<repo>[#<PRs>][,<repo>[#<PRs>]...] | <3-6 word title>\": stories are ticket ids, the first in full and the rest as numbers (DEV-1234,1235); repos are one letter each, comma-separated ($repos, G general or not yet known; another repo gets its first letter), each followed by its own PR numbers (W#139,140,A#100). Leave out \"<stories> ➔ \" when no story is known and a repo's \"#<PRs>\" while it has no PR yet. E.g. \"DEV-1234 ➔ W#139,140,A#100 | Local DB setup\", \"DEV-1234,1235 ➔ W | ...\", \"W#132 | ...\", \"A | Login bug fixes\", \"G | Weekly planning\". Forks are titled \"(<2-5 word topic>) <root parent title>\"."
 # A parent title in the agreed shape, optionally marked "✅ " (the user said "Done") or "❎ " ("Close").
-shape='^((✅|❎) )?[A-Z](,[A-Z])*(:[A-Z][A-Z0-9]*-[0-9]+(,[0-9]+)*)?( ➔ #[0-9]+(,[0-9]+)*)? \| .+'
+shape='^((✅|❎) )?([A-Z][A-Z0-9]*-[0-9]+(,[0-9]+)* ➔ )?[A-Z](#[0-9]+(,[0-9]+)*)?(,[A-Z](#[0-9]+(,[0-9]+)*)?)* \| .+'
 
 # The mark a title starts with ("✅ ", "❎ " or nothing), and what it means.
 mark_of() {
@@ -150,6 +150,6 @@ elif [ -z "$title" ]; then
   [ "$event" = Stop ] && block "this session has no title; title it \"G | <3-6 word topic>\" (the real repo/story/PR prefix if the conversation shows one). $rename"
   say "This session has no title yet. $rule Before ending your reply, title it \"G | <3-6 word topic>\", using the real repo/story/PR prefix if this turn already shows one. $rename"
 else
-  [ "$event" = Stop ] && block "\"$title\" isn't in the \"<repos>[:<stories>][ ➔ #<PRs>] | <title>\" shape; rename it, converting any old [Project#refs] prefix (\"G | \" if no repo is known). $rename"
-  say "Session title: \"$title\" isn't in the agreed shape. $rule Before ending your reply, rename it: convert an old \"[Web#132,API#100] x\" prefix to \"W,A ➔ #132,100 | x\", and put \"G | \" in front of an unprefixed title unless this turn shows the real repo/story/PR. $rename"
+  [ "$event" = Stop ] && block "\"$title\" isn't in the \"[<stories> ➔ ]<repo>[#<PRs>][,<repo>[#<PRs>]...] | <title>\" shape; rename it, converting an old \"W,A:DEV-1234 ➔ #132,100\" or [Project#refs] prefix (\"G | \" if no repo is known). $rename"
+  say "Session title: \"$title\" isn't in the agreed shape. $rule Before ending your reply, rename it: convert an old \"W,A:DEV-1234 ➔ #132,100 | x\" prefix to \"DEV-1234 ➔ W#132,A#100 | x\" (no PR: \"W:DEV-1234 | x\" → \"DEV-1234 ➔ W | x\") and an old \"[Web#132,API#100] x\" prefix to \"W#132,A#100 | x\", and put \"G | \" in front of an unprefixed title unless this turn shows the real repo/story/PR. $rename"
 fi

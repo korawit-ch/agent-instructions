@@ -365,13 +365,14 @@ repo), `learn` (teach and quiz me), `agents-md` (writing repo agent instructions
   PR descriptions/comments, or commit messages.
 - How to address colleagues (nicknames, handles) and project-specific notes live in your personal
   overlay. Keep these personal preferences outside shared repository instructions.
-- Session and chat titles: a parent is `<repos>[:<stories>][ ➔ #<PRs>] | <title>`. Repos are one
-  letter each (e.g. W Web, A API, M Mobile; G general or not yet known); stories are
-  ticket ids (`DEV-1234,1235`); PRs follow the repo order. Drop the story or PR part while
-  unknown, e.g. `A:DEV-1234 ➔ #132 | …`, `A,D ➔ #132,100 | …`, `G | …`. A fork is
+- Session and chat titles: a parent is `[<stories> ➔ ]<repo>[#<PRs>][,<repo>[#<PRs>]…] | <title>`.
+  Stories are ticket ids, the first in full and the rest as numbers (`DEV-1234,1235`). Repos are
+  one letter each (e.g. W Web, A API, M Mobile; G general or not yet known), each followed by its
+  own PRs. Drop the story part or a repo's PRs while unknown, e.g. `DEV-1234 ➔ W#139,140,A#100 | …`,
+  `DEV-1234 ➔ W | …`, `W#132 | …`, `G | …`. A fork is
   `(<topic>) <root parent title>`. The title covers the session's current scope, not its first
   prompt; when a parent's title changes, rename its forks to match. A finished session gets `✅ `
-  in front of its title (`✅ D:DEV-1234 ➔ #105 | …`, `✅ (<topic>) …`) when my message is just
+  in front of its title (`✅ DEV-1234 ➔ A#105 | …`, `✅ (<topic>) …`) when my message is just
   "Done"; a session closed without finishing gets `❎ ` when my message is just "Close". One mark
   at a time, and any other message I send in that session removes it (it's open again). A
   parent's mark doesn't pass to its forks; a fork gets its own when I say "Done" or "Close" in it.
