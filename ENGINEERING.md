@@ -29,6 +29,13 @@ Commit identity: if you use different emails per repo owner (work vs personal), 
 mapping in your personal overlay (see "Maintaining these instructions"). Before committing, check
 that `git config user.email` matches the repo's owner.
 
+PR on a ticket: when you open a PR (draft or ready) for a ticket, also comment on that ticket and
+move it to the tracker's review status (e.g. IN REVIEW). The comment starts with `PR: <link>` (one
+line per PR when the ticket has several), then a short summary of what was done and the context a
+reader needs, then an "After merge" list when something must still happen (deploy order,
+migrations, re-syncs, config, who acts); leave that list out when nothing does. Show me the
+comment text with the PR, and post it and move the status only after I OK that text.
+
 ## Scope
 
 Investigate wide, change narrow. The impact sweep stays as wide as it can go; only the changes are
