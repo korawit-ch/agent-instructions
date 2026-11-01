@@ -24,6 +24,11 @@
             "type": "command",
             "command": "~/agent-instructions/hooks/scope-nudge.sh",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "~/agent-instructions/hooks/git-tag.sh --hook",
+            "timeout": 10
           }
         ]
       }

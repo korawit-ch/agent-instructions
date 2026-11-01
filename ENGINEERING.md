@@ -419,6 +419,9 @@ uses this layout:
 
 > 🔗 **Related:** <follow-up> · <risk> · <adjacent topic>
 
+> 🌿 **Git:** `<repo or worktree folder>` on `<branch>` · unpushed:<n> · staged:<n> ·
+> unstaged:<n> · untracked:<n>
+
 > ⏭️ **Next:** **You:** <what I must or should do now or next, or "nothing"> · **Further:** <ideas
 > beyond this scope for a better result, or "none">
 ```
@@ -434,9 +437,15 @@ uses this layout:
   grouped bullets to paragraphs.
 - 🧭 Context and 🔗 Related are separate boxes with a blank line between them. Include both in
   every answer that has a body; leave one out only when it would be empty or only repeat the body.
-- ⏭️ **Next** is the last box, below 🔗 Related, in every reply. **You:** what I must or should do,
+- ⏭️ **Next** is the last box, below 🌿 Git, in every reply. **You:** what I must or should do,
   now or next. **Further:** ideas beyond the current scope that would give a better result (the
   place for the bigger idea from Scope; never done without my go-ahead). When there is a body,
   the body says these too.
-- **Short answers** (yes/no, a single fact): 💬 Prompt, ⚡ Brief Summary and ⏭️ Next only.
+- 🌿 **Git** comes right above ⏭️ Next in every reply: the state of each repo or worktree the
+  session works in, measured at the end of the turn, never guessed. Paste the output of
+  `~/agent-instructions/hooks/git-tag.sh <path>...` (where it's missing, count from `git status`).
+  unpushed = commits no remote branch has; staged, unstaged and untracked count files; behind,
+  a gone upstream, conflicts and a rebase or merge in progress show only when present. With no
+  repo in use: `> 🌿 **Git:** no repo in use`. It's a status line, not lifted from the body.
+- **Short answers** (yes/no, a single fact): 💬 Prompt, ⚡ Brief Summary, 🌿 Git and ⏭️ Next only.
 - Drafts I asked for (replies, messages, PR text) go in the body, in full.

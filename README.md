@@ -42,6 +42,7 @@ For Codex, join the files into one: `cat ENGINEERING.md ~/agent-instructions-per
 | `guard-bash.sh` | PreToolUse (Bash) | Asks before `git commit`/`push`, and before commands that reach a remote database, cloud CLI or server |
 | `session-title.sh` | UserPromptSubmit, Stop | Keeps Claude desktop session titles in the `<repos>[:<stories>][ ➔ #<PRs>] \| <title>` shape; `✅` on a "Done" prompt, off again on the next prompt. Set `SESSION_TITLE_REPOS` to your repo letters |
 | `scope-nudge.sh` | UserPromptSubmit | When a message links two or more tickets/threads, asks which one defines the job |
+| `git-tag.sh` | UserPromptSubmit | Measures the session's repo and reminds Claude to add the 🌿 Git box (branch, unpushed commits, staged/unstaged/untracked files) above ⏭️ Next. Also runs by hand: `git-tag.sh <path>...` |
 | `format-on-edit.sh` | PostToolUse (Edit, Write) | Runs the repo's own Prettier on the edited file |
 | `review-trigger.sh` | PostToolUse (Bash) | After `gh pr create --draft`, starts the `pre-pr-review` skill. Set `PRE_PR_REVIEW_OWNERS` to limit it to some GitHub owners |
 
