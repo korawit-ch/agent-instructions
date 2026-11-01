@@ -40,7 +40,7 @@ For Codex, join the files into one: `cat ENGINEERING.md ~/agent-instructions-per
 | Hook | Event | Does |
 |---|---|---|
 | `guard-bash.sh` | PreToolUse (Bash) | Asks before `git commit`/`push`, and before commands that reach a remote database, cloud CLI or server |
-| `session-title.sh` | UserPromptSubmit, Stop | Keeps Claude desktop session titles in the `<repos>[:<stories>][ ➔ #<PRs>] \| <title>` shape; `✅` on a "Done" prompt, off again on the next prompt. Set `SESSION_TITLE_REPOS` to your repo letters |
+| `session-title.sh` | UserPromptSubmit, Stop | Keeps Claude desktop session titles in the `[<stories> ➔ ]<repo>[#<PRs>][,<repo>[#<PRs>]…] \| <title>` shape, and forks in `(<topic>) <parent title>`; `✅` on a "Done" prompt, `❎` on a "Close" prompt, off again on the next prompt. `⭐️` in front of everything on a "Pin" prompt, kept through renames until "Unpin". Set `SESSION_TITLE_REPOS` to your repo letters (default `W Web, A API, M Mobile`) |
 | `scope-nudge.sh` | UserPromptSubmit | When a message links two or more tickets/threads, asks which one defines the job |
 | `git-tag.sh` | UserPromptSubmit | Measures the session's repo and reminds Claude to add the 🌿 Git box (branch, unpushed commits, staged/unstaged/untracked files) above ⏭️ Next. Also runs by hand: `git-tag.sh <path>...` |
 | `format-on-edit.sh` | PostToolUse (Edit, Write) | Runs the repo's own Prettier on the edited file |

@@ -13,32 +13,49 @@ sid=$(printf '%s' "$input" | jq -r '.session_id // empty')
 [ -z "$sid" ] && exit 0
 # A prompt that is just "Done" marks the session finished: its title gets a leading "✅ ".
 # A prompt that is just "Close" marks it closed without finishing: a leading "❎ ".
-# Any other prompt reopens it, so the mark comes off. Stop can't see the prompt, so the
-# UserPromptSubmit run records the verdict for the Stop run of the same turn.
+# Any other prompt reopens it, so the mark comes off.
+# A prompt that is just "Pin" puts "⭐️ " in front of the whole title ("⭐️ ✅ G | ..."), and it
+# stays through every rename until a prompt that is just "Unpin". Pin and Unpin leave ✅/❎ alone.
+# Stop can't see the prompt, so the UserPromptSubmit run records the verdict (line 1) and whether
+# the title must carry the ⭐️ (line 2: star or none) for the Stop run of the same turn.
 state="${TMPDIR:-/tmp}/session-title-$sid.done"
+star_word=""
 if [ "$event" = Stop ]; then
-  said=$(cat "$state" 2>/dev/null || echo no)
+  said=no
+  [ -f "$state" ] && { read -r said; read -r star_word; } < "$state"
 else
   said=no
   word=$(printf '%s' "$input" | jq -r '.prompt // ""' | tr -d '[:space:]')
   printf '%s' "$word" | grep -qiE '^done[.!]*$' && said=done
   printf '%s' "$word" | grep -qiE '^close[.!]*$' && said=close
-  printf '%s' "$said" > "$state"
+  printf '%s' "$word" | grep -qiE '^pin[.!]*$' && said=pin
+  printf '%s' "$word" | grep -qiE '^unpin[.!]*$' && said=unpin
+  printf '%s\n' "$said" > "$state"
 fi
 # The mark this turn's prompt asks for ("yes" is the verdict an older version of this hook wrote).
+# "keep" becomes whatever ✅/❎ the title already has, once the title is read.
 case "$said" in
   done|yes) mark="✅ "; said_word=Done ;;
   close) mark="❎ "; said_word=Close ;;
+  pin|unpin) mark=keep; said_word="" ;;
   *) mark=""; said_word="" ;;
 esac
 
 rename='Rename with mcp__ccd_session_mgmt__set_session_title (session_id "self").'
 repos=${SESSION_TITLE_REPOS:-W Web, A API, M Mobile}
 rule="Parent session titles are \"[<stories> ➔ ]<repo>[#<PRs>][,<repo>[#<PRs>]...] | <3-6 word title>\": stories are ticket ids, the first in full and the rest as numbers (DEV-1234,1235); repos are one letter each, comma-separated ($repos, G general or not yet known; another repo gets its first letter), each followed by its own PR numbers (W#139,140,A#100). Leave out \"<stories> ➔ \" when no story is known and a repo's \"#<PRs>\" while it has no PR yet. E.g. \"DEV-1234 ➔ W#139,140,A#100 | Local DB setup\", \"DEV-1234,1235 ➔ W | ...\", \"W#132 | ...\", \"A | Login bug fixes\", \"G | Weekly planning\". Forks are titled \"(<2-5 word topic>) <root parent title>\"."
-# A parent title in the agreed shape, optionally marked "✅ " (the user said "Done") or "❎ " ("Close").
+# A parent title in the agreed shape (after any "⭐️ "), optionally marked "✅ " (the user said "Done") or "❎ " ("Close").
 shape='^((✅|❎) )?([A-Z][A-Z0-9]*-[0-9]+(,[0-9]+)* ➔ )?[A-Z](#[0-9]+(,[0-9]+)*)?(,[A-Z](#[0-9]+(,[0-9]+)*)?)* \| .+'
 
-# The mark a title starts with ("✅ ", "❎ " or nothing), and what it means.
+# "⭐️ " when a title starts with the pin star (with or without the emoji variation selector).
+star_of() {
+  case "$1" in "⭐️ "*|"⭐ "*) printf '⭐️ ' ;; esac
+}
+strip_star() {
+  local t=${1#"⭐️ "}
+  printf '%s' "${t#"⭐ "}"
+}
+# The mark a title starts with after any ⭐️ ("✅ ", "❎ " or nothing), and what it means.
 mark_of() {
   case "$1" in "✅ "*) printf '✅ ' ;; "❎ "*) printf '❎ ' ;; esac
 }
@@ -77,6 +94,30 @@ fi
 title=$(jq -r '.title // ""' "$meta")
 is_fork=$(jq -r 'if .forkedFromSessionId != null and (.lineageDetached // false) != true then "yes" else "no" end' "$meta")
 
+# The ⭐️ sits in front of everything; the checks below work on the title without it.
+has_star=$(star_of "$title")
+title=$(strip_star "$title")
+[ "$mark" = keep ] && mark=$(mark_of "$title")
+if [ "$event" = Stop ]; then
+  case "$star_word" in star) star="⭐️ " ;; none) star="" ;; *) star=$has_star ;; esac
+else
+  case "$said" in pin) star="⭐️ " ;; unpin) star="" ;; *) star=$has_star ;; esac
+  [ -n "$star" ] && printf 'star\n' >> "$state" || printf 'none\n' >> "$state"
+fi
+if [ "$has_star" != "$star" ]; then
+  case "$said" in
+    pin) fix="The user said \"Pin\": put ⭐️ in front of the whole title by renaming it to \"⭐️ $title\". The ⭐️ stays in front through every later rename until the user says \"Unpin\"; leave any ✅ or ❎ and the forks' titles as they are. $rename" ;;
+    unpin) fix="The user said \"Unpin\": remove the ⭐️ by renaming it to \"$title\". $rename" ;;
+    *) if [ -n "$star" ]; then
+         fix="this session is pinned, but its title lost the ⭐️; rename it to \"⭐️ $title\". The ⭐️ stays in front of the whole title until the user says \"Unpin\". $rename"
+       else
+         fix="the title gained a ⭐️ the user didn't ask for (only a \"Pin\" prompt adds it); rename it to \"$title\". $rename"
+       fi ;;
+  esac
+  [ "$event" = Stop ] && block "$fix"
+  say "$fix Do this before ending your reply."
+fi
+
 if [ "$is_fork" = yes ]; then
   # Walk up to the root parent: the first ancestor that was never forked or has been detached.
   base=""
@@ -92,7 +133,8 @@ if [ "$is_fork" = yes ]; then
     fi
   done
   [ -n "$base" ] || exit 0
-  # A fork carries its own mark; the root parent's mark is not part of the fork's base title.
+  # A fork carries its own marks; the root parent's ⭐️ and ✅/❎ are not part of the fork's base title.
+  base=$(strip_star "$base")
   base=${base#"$(mark_of "$base")"}
   had=$(mark_of "$title")
   title=${title#"$had"}
@@ -100,9 +142,9 @@ if [ "$is_fork" = yes ]; then
   if [ "$had" != "$mark" ]; then
     case "$title" in "("?*") $base")
       if [ -n "$mark" ]; then
-        fix="The user said \"$said_word\": this fork is $(mark_word "$mark"). Rename it to \"$mark$title\". $rename"
+        fix="The user said \"$said_word\": this fork is $(mark_word "$mark"). Rename it to \"$star$mark$title\". $rename"
       else
-        fix="The user continued this $(mark_word "$had") fork, so it is open again: remove the ${had% } by renaming it to \"$title\". $rename"
+        fix="The user continued this $(mark_word "$had") fork, so it is open again: remove the ${had% } by renaming it to \"$star$title\". $rename"
       fi
       [ "$event" = Stop ] && block "$fix"
       say "$fix Do this before ending your reply." ;;
@@ -111,41 +153,41 @@ if [ "$is_fork" = yes ]; then
   topic_rule="the topic is 2-5 words, with PR refs like Web#129 or API#95,98 where known. $rename"
   case "$title" in
     *" (fork)")
-      [ "$event" = Stop ] && block "this fork is still titled \"$title\". Ask the user what it is about (AskUserQuestion), then rename it to \"$mark(<topic>) $base\"; $topic_rule"
-      say "This session is a fork still titled \"$title\". Before working on the request, use AskUserQuestion to ask the user what this fork is about, offering 1-2 short topics drawn from their message. Then rename this session to \"$mark(<topic>) $base\" and continue with the request; $topic_rule" ;;
+      [ "$event" = Stop ] && block "this fork is still titled \"$title\". Ask the user what it is about (AskUserQuestion), then rename it to \"$star$mark(<topic>) $base\"; $topic_rule"
+      say "This session is a fork still titled \"$title\". Before working on the request, use AskUserQuestion to ask the user what this fork is about, offering 1-2 short topics drawn from their message. Then rename this session to \"$star$mark(<topic>) $base\" and continue with the request; $topic_rule" ;;
     "(fork: "*)
       topic=$(printf '%s' "$title" | sed -nE 's/^\(fork: ([^()]*)\).*/\1/p')
-      [ "$event" = Stop ] && block "rename this fork to \"$mark($topic) $base\"; $topic_rule"
-      say "Fork title: \"$title\" uses the old \"(fork: ...)\" format. Before ending your reply, rename it to \"$mark($topic) $base\", adjusting the topic if this turn changed it; $topic_rule" ;;
+      [ "$event" = Stop ] && block "rename this fork to \"$star$mark($topic) $base\"; $topic_rule"
+      say "Fork title: \"$title\" uses the old \"(fork: ...)\" format. Before ending your reply, rename it to \"$star$mark($topic) $base\", adjusting the topic if this turn changed it; $topic_rule" ;;
     "("?*") $base")
       [ "$event" = Stop ] && exit 0
-      say "Fork title: \"$mark$title\" (this fork's topic in the leading parentheses, then the root parent's title). Before ending your reply, if this turn's prompt or your answer shows the topic has shifted, widened, or gained a PR number, update only that topic; otherwise leave the title alone. $topic_rule" ;;
+      say "Fork title: \"$star$mark$title\" (this fork's topic in the leading parentheses, then the root parent's title). Before ending your reply, if this turn's prompt or your answer shows the topic has shifted, widened, or gained a PR number, update only that topic; otherwise leave the title alone. $topic_rule" ;;
     "("*")"*)
       topic=$(printf '%s' "$title" | sed -nE 's/^\(([^()]*)\).*/\1/p')
-      [ "$event" = Stop ] && block "this fork's title doesn't end with its root parent's current title; rename it to \"$mark($topic) $base\"; $topic_rule"
-      say "Fork title: \"$title\" doesn't end with its root parent's current title. Before ending your reply, rename it to \"$mark($topic) $base\", adjusting the topic if this turn changed it; $topic_rule" ;;
+      [ "$event" = Stop ] && block "this fork's title doesn't end with its root parent's current title; rename it to \"$star$mark($topic) $base\"; $topic_rule"
+      say "Fork title: \"$title\" doesn't end with its root parent's current title. Before ending your reply, rename it to \"$star$mark($topic) $base\", adjusting the topic if this turn changed it; $topic_rule" ;;
     *")")
       topic=$(printf '%s' "$title" | sed -nE 's/.*\(([^()]*)\)$/\1/p')
-      [ "$event" = Stop ] && block "rename this fork to \"$mark($topic) $base\"; $topic_rule"
-      say "Fork title: \"$title\" uses the old topic-at-the-end format. Before ending your reply, rename it to \"$mark($topic) $base\", adjusting the topic if this turn changed it; $topic_rule" ;;
+      [ "$event" = Stop ] && block "rename this fork to \"$star$mark($topic) $base\"; $topic_rule"
+      say "Fork title: \"$title\" uses the old topic-at-the-end format. Before ending your reply, rename it to \"$star$mark($topic) $base\", adjusting the topic if this turn changed it; $topic_rule" ;;
     *)
-      [ "$event" = Stop ] && block "this fork has no topic; rename it to \"$mark(<topic>) $base\", taking the topic from this fork's conversation; $topic_rule"
-      say "This fork's title \"$title\" has no topic. Before ending your reply, rename it to \"$mark(<topic>) $base\", taking the topic from this fork's conversation; $topic_rule" ;;
+      [ "$event" = Stop ] && block "this fork has no topic; rename it to \"$star$mark(<topic>) $base\", taking the topic from this fork's conversation; $topic_rule"
+      say "This fork's title \"$title\" has no topic. Before ending your reply, rename it to \"$star$mark(<topic>) $base\", taking the topic from this fork's conversation; $topic_rule" ;;
   esac
 fi
 
 had=$(mark_of "$title")
 bare=${title#"$had"}
 if [ -z "$mark" ] && [ -n "$had" ]; then
-  fix="The user continued a $(mark_word "$had") session, so it is open again: remove the ${had% } by renaming it to \"$bare\" (and update the rest of the title if the scope changed). Leave its forks' own marks alone. $rename"
+  fix="The user continued a $(mark_word "$had") session, so it is open again: remove the ${had% } by renaming it to \"$star$bare\" (and update the rest of the title if the scope changed). Leave its forks' own marks alone. $rename"
   [ "$event" = Stop ] && block "$fix"
   say "$fix Do this before ending your reply."
 elif [ -n "$mark" ] && [ -n "$title" ] && [ "$had" != "$mark" ]; then
-  [ "$event" = Stop ] && block "the user said \"$said_word\", but the title doesn't start with ${mark% }; rename it to \"$mark$bare\". $rename"
-  say "The user said \"$said_word\": this session is $(mark_word "$mark"). Before ending your reply, rename it to \"$mark$bare\" (fixing the rest of the title first if it isn't in the agreed shape), but leave its forks alone: a fork's title ends with the parent title without the mark, and a fork gets its own ✅ or ❎ only when the user says \"Done\" or \"Close\" in that fork. $rename"
+  [ "$event" = Stop ] && block "the user said \"$said_word\", but the title doesn't start with ${mark% }; rename it to \"$star$mark$bare\". $rename"
+  say "The user said \"$said_word\": this session is $(mark_word "$mark"). Before ending your reply, rename it to \"$star$mark$bare\" (fixing the rest of the title first if it isn't in the agreed shape), but leave its forks alone: a fork's title ends with the parent title without the mark, and a fork gets its own ✅ or ❎ only when the user says \"Done\" or \"Close\" in that fork. $rename"
 elif printf '%s' "$title" | grep -qE "$shape"; then
   [ "$event" = Stop ] && exit 0
-  say "Session title: \"$title\". $rule The title covers the session's whole current scope, not just its first prompt. Before ending your reply, update the prefix if this turn identified a repo, story id or PR number it lacks (or replaces G), and rewrite the title text if the work has shifted or widened beyond it; otherwise leave the title alone. Keep a leading \"✅ \" or \"❎ \" when renaming. When you rename it, also rename every fork whose title ends with the old title (find them with mcp__ccd_session_mgmt__list_sessions) to \"(<its topic>) <new title without a leading ✅ or ❎>\", keeping each fork's own leading mark. $rename"
+  say "Session title: \"$star$title\". $rule The title covers the session's whole current scope, not just its first prompt. Before ending your reply, update the prefix if this turn identified a repo, story id or PR number it lacks (or replaces G), and rewrite the title text if the work has shifted or widened beyond it; otherwise leave the title alone. Keep a leading \"⭐️ \" (always first), \"✅ \" or \"❎ \" when renaming. When you rename it, also rename every fork whose title ends with the old title (find them with mcp__ccd_session_mgmt__list_sessions) to \"(<its topic>) <new title without a leading ⭐️, ✅ or ❎>\", keeping each fork's own leading marks. $rename"
 elif [ -z "$title" ]; then
   [ "$event" = Stop ] && block "this session has no title; title it \"G | <3-6 word topic>\" (the real repo/story/PR prefix if the conversation shows one). $rename"
   say "This session has no title yet. $rule Before ending your reply, title it \"G | <3-6 word topic>\", using the real repo/story/PR prefix if this turn already shows one. $rename"

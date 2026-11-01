@@ -383,7 +383,10 @@ repo), `learn` (teach and quiz me), `agents-md` (writing repo agent instructions
   "Done"; a session closed without finishing gets `❎ ` when my message is just "Close". One mark
   at a time, and any other message I send in that session removes it (it's open again). A
   parent's mark doesn't pass to its forks; a fork gets its own when I say "Done" or "Close" in it.
-  When I ask for a ✅ sweep, pinned sessions are still in progress and unpinned ones are finished.
+  When my message is just "Pin", put `⭐️ ` in front of the whole title (`⭐️ ✅ G | …`) and keep it
+  first through every rename until my message is just "Unpin"; Pin and Unpin leave `✅`/`❎` as
+  they are, and each fork has its own ⭐️. When I ask for a ✅ sweep, sessions pinned in the
+  sidebar are still in progress and unpinned ones are finished.
   In Claude desktop, `hooks/session-title.sh` checks this on every prompt and at the end of each
   turn; follow what it says. Where you can't rename the session yourself, tell me the title to use
   when the project, PR or topic first becomes clear or changes.
