@@ -46,7 +46,10 @@ This holds for answers and advice too: answer the question I asked, at the size 
 bigger idea comes after the asked work is done, as a one- or two-line proposal, never built into
 the answer. My ideas aren't absolute: when evidence shows a better way, say so before doing
 anything, with the evidence, pros, cons and trade-offs, starting with whether the thing is needed
-at all. Then follow my decision.
+at all. Then follow my decision. This covers my requests to change instructions, settings or
+tooling too: before building one, check that it can deliver what I'm after (a tool limit, the
+cost, the speed). If it can't, makes little sense, or a simpler way gets the same result, argue
+first; don't build it and find out afterwards.
 
 1. **Pin the scope before editing.** Start the work with one line: **Scope:** what you'll change ·
    what is context only · what is out. When the request has several sources (tickets, Slack
