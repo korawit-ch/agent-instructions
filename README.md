@@ -7,9 +7,10 @@ writes. You can explain it, trace it, predict change impact, and change it safel
 | Path | What it is |
 |---|---|
 | `ENGINEERING.md` | The core instructions: scope, investigation, high-risk code, impact sweep, verification, reporting, response layout |
-| `skills/` | `risk-review`, `analyze-repo`, `learn`, `agents-md`, `monex-architecture`, `pre-pr-review` |
+| `skills/` | `risk-review`, `analyze-repo`, `learn`, `agents-md`, `monex-architecture`, `pre-pr-review`, `agent-handoff`, `instruction-sync` |
 | `hooks/` | Claude Code hooks that enforce parts of the instructions |
 | `settings.hooks.json` | The `hooks` block to merge into `~/.claude/settings.json` |
+| `plugins/` | `diff-review`, a Claude Code mod, installable from this repo as a plugin marketplace |
 
 ## Install (Claude Code)
 
@@ -33,7 +34,7 @@ writes. You can explain it, trace it, predict change impact, and change it safel
    `jq`.
 
 For Codex, join the files into one: `cat ENGINEERING.md ~/agent-instructions-personal.md >
-~/.codex/AGENTS.md`.
+~/.codex/AGENTS.md`, or let the `instruction-sync` skill do it (see below).
 
 ## Hooks
 
@@ -46,6 +47,35 @@ For Codex, join the files into one: `cat ENGINEERING.md ~/agent-instructions-per
 | `format-on-edit.sh` | PostToolUse (Edit, Write) | Runs the repo's own Prettier on the edited file |
 | `review-trigger.sh` | PostToolUse (Bash) | After `gh pr create --draft`, starts the `pre-pr-review` skill. Set `PRE_PR_REVIEW_OWNERS` to limit it to some GitHub owners |
 
+## Keeping the copies in sync
+
+`skills/instruction-sync/sync.sh` writes the core plus your overlay to `~/.codex/AGENTS.md` and stops
+if the Codex app edited that copy since the last sync. It also:
+
+- scans this repo for personal details against your own patterns
+- checks the sizes of optional hand-condensed ChatGPT copies and flags when they're stale
+- regenerates a cloud setup script (see below)
+- with `AGENT_INSTRUCTIONS_PUBLIC` set, flags source changes your sanitized public copy hasn't
+  picked up (`public-check.sh`)
+
+Its working files live in `~/.agent-instructions/`. Put one regex per line in
+`~/.agent-instructions/leak-patterns.txt`: your name, emails, employers, colleagues, private repo
+names. Paths are overridable with `AGENT_INSTRUCTIONS_DIR`, `AGENT_INSTRUCTIONS_OVERLAY` and
+`AGENT_INSTRUCTIONS_STATE`.
+
+## Plugins
+
+`diff-review` is a Claude Code mod. It adds a note above the prompt for each repo with something to
+review (commits ahead of the base branch, unpushed commits, uncommitted changes). It also adds a
+pane with All / PR / Unpushed / Uncommitted tabs, the commits, and per-file diffs, and `/diff-review
+[repo]` opens it. It never blocks git. Its `editor` option picks what the Open buttons use (`cursor`
+or `vscode`). Install it from this repo:
+
+```text
+/plugin marketplace add korawit-ch/agent-instructions
+/plugin install diff-review@agent-instructions
+```
+
 ## Cloud sessions
 
 Claude Code cloud sessions don't read your `~/.claude`. Use a personal cloud environment whose
@@ -57,4 +87,7 @@ mkdir -p ~/.claude
 printf '@~/agent-instructions/ENGINEERING.md\n' > ~/.claude/CLAUDE.md
 ```
 
-Hooks from `~/.claude/settings.json` don't run in cloud sessions.
+Hooks from `~/.claude/settings.json` don't run in cloud sessions. `instruction-sync` generates a
+setup script (`~/.agent-instructions/cloud-setup.sh`) that writes the instruction files and the
+`CLAUDE.md` in the cloud VM; it includes your overlay only while
+`~/.agent-instructions/.cloud-include-personal` exists.

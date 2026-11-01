@@ -1,0 +1,17 @@
+{
+  "name": "diff-review",
+  "version": "0.6.6",
+  "description": "A PR review layer: a note above the prompt for each repo with something to review, and a pane with All / PR / Unpushed / Uncommitted tabs, files changed and per-file diffs. Never blocks git.",
+  "userConfig": {
+    "editor": {
+      "type": "string",
+      "title": "Open files in",
+      "description": "The editor the Open buttons open files and repos in: cursor or vscode.",
+      "default": "cursor",
+      "options": [
+        "cursor",
+        "vscode"
+      ]
+    }
+  }
+}

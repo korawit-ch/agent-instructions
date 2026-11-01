@@ -1,0 +1,12 @@
+{
+  "name": "agent-instructions",
+  "owner": { "name": "korawit-ch" },
+  "metadata": { "description": "Claude Code mods that go with these agent instructions." },
+  "plugins": [
+    {
+      "name": "diff-review",
+      "source": "./plugins/diff-review",
+      "description": "A PR review layer above the prompt: what each repo's branch would ship, committed or not, with per-file diffs."
+    }
+  ]
+}
